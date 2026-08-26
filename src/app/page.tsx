@@ -1,12 +1,41 @@
-﻿import { getVendors, STATUS_META, formatRelativeTime } from "@/lib/vendors";
+"use client";
 
-// Always render this page fresh, per request. Explicit rather than relying on
-// default caching inference: a status dashboard showing stale "operational"
-// during a real outage isn't a performance nitpick, it defeats the product.
-export const dynamic = "force-dynamic";
+import { useEffect, useState } from "react";
+import { getVendors, STATUS_META, formatRelativeTime, type Vendor } from "@/lib/vendors";
 
-export default async function Home() {
-  const vendors = await getVendors();
+export default function Home() {
+  const [vendors, setVendors] = useState<Vendor[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getVendors()
+      .then((v) => {
+        if (!cancelled) setVendors(v);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
+        <p className="text-sm text-red-600 dark:text-red-400">Failed to load status: {error}</p>
+      </main>
+    );
+  }
+
+  if (!vendors) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>
+      </main>
+    );
+  }
 
   const monitoredSeverities = vendors
     .filter((v) => v.current_status !== "unknown")
@@ -25,7 +54,6 @@ export default async function Home() {
           Live status for the tools your team depends on — checked automatically every 5 minutes.
         </p>
       </header>
-
       <div
         className={`mb-8 rounded-lg border px-4 py-3 text-sm font-medium ${
           allOperational
@@ -37,7 +65,6 @@ export default async function Home() {
           ? "All monitored systems operational"
           : `${affectedCount} service${affectedCount === 1 ? "" : "s"} experiencing issues`}
       </div>
-
       <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
         {vendors.map((vendor) => {
           const meta = STATUS_META[vendor.current_status];
@@ -66,7 +93,6 @@ export default async function Home() {
           );
         })}
       </ul>
-
       <footer className="mt-10 text-center text-xs text-zinc-400 dark:text-zinc-500">
         Data refreshes automatically — reload this page for the latest status.
       </footer>
